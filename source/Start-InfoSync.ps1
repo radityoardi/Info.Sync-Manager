@@ -3,14 +3,19 @@
 [Cmdletbinding()]
 Param(
 	[Parameter(Mandatory = $false, Position = 0)][Alias("c")][string]$ConfigurationFilePath = "",
-	[Parameter(Mandatory = $false, Position = 1)][Alias("r")][int]$MaxMainSourceRows = 0
+	[Parameter(Mandatory = $false, Position = 1)][Alias("r")][int]$MaxMainSourceRows = 0,
+	[ValidateSet("Default","UTF8","UTF7","UTF32","Ascii","Unicode")]
+	[Parameter(Mandatory = $false, Position = 2)][Alias("enc")][string]$DefaultEncoding = "UTF8"
 )
+
+#set all encoding to UTF-8 for special characters/non-roman characters
+$PSDefaultParameterValues['*:Encoding'] = $DefaultEncoding
 
 #default configuration file path
 $ConfigFilePath = (&{ if ($ConfigurationFilePath) { $ConfigurationFilePath } else { "configuration.json" } })
 #Load Configuration
 if (-not (Test-Path $ConfigFilePath)) { Write-Host "Configuration '$($ConfigFilePath)' does not exist." -Fore Yellow; exit; }
-$global:c = Get-Content -Raw -Path $ConfigFilePath -ErrorAction Stop | ConvertFrom-Json 
+$global:c = Get-Content -Raw -Path $ConfigFilePath -ErrorAction Stop | ConvertFrom-Json
 
 $global:c | Add-Member -TypeName PSObject -NotePropertyMembers ([ordered]@{
 	RuntimeConfiguration = [PSCustomObject]@{
@@ -28,28 +33,28 @@ $global:c | Add-Member -TypeName PSObject -NotePropertyMembers ([ordered]@{
 				[PSCustomObject]@{
 					Type      = "CSV"
 					Stage     = "RawImport"
-					Subscript = "{CurrentFolder}\nodes\CSV-Import.ps1"
+					Subscript = "{CurrentFolder}\Extensions\Use-CSVImport.ps1"
 				},
 				[PSCustomObject]@{
 					Type      = "LDAP"
 					Stage     = "RawImport"
-					Subscript = "{CurrentFolder}\nodes\LDAP-Import.ps1"
+					Subscript = "{CurrentFolder}\extensions\Use-LDAPImport.ps1"
 				}
 			)
 			Destination = [PSCustomObject[]]@(
 				[PSCustomObject]@{
 					Type      = "LDAP"
-					Subscript = "{CurrentFolder}\nodes\LDAP-Export.ps1"
+					Subscript = "{CurrentFolder}\extensions\Use-LDAPExport.ps1"
 				},
 				[PSCustomObject]@{
 					Type      = "CSV"
-					Subscript = "{CurrentFolder}\nodes\CSV-Export.ps1"
+					Subscript = "{CurrentFolder}\extensions\Use-CSVExport.ps1"
 				}
 			)
 			Dependencies = [PSCustomObject[]]@(
 				[PSCustomObject]@{
 					ModuleName = "GlobalModules"
-					Path       = ".\\library\\GlobalModules.psd1"
+					Path       = ".\\Extensions\\GlobalModules.psd1"
 				}
 			)
 		}

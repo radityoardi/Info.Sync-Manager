@@ -24,7 +24,12 @@ if (-not (Test-Path "C:\Program Files (x86)\GnuPG\bin\gpg.exe")) {
 Write-Host "Installing Event Log Sources..."
 @(
 	"Info Sync Manager",
+	#"Identity Sync - Transfer Promotion", #For Ilson: only in production later
+	#"Identity Sync - PHOTOSYNC", #For Ilson: only in production later
 	"Start-InfoSync.ps1",
+	#"EncryptPassword.ps1",
+	#"ExecuteIdentitySyncProcess.ps1",
+	#"ImportDecrypt.ps1",
 	"GlobalModules.psm1"
 ) | ForEach {
 	Write-Host "  Installing Sources `"$($_)`"." -NoNewLine

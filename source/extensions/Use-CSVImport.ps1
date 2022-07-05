@@ -11,7 +11,7 @@ try {
 	if (Test-Path ($Source.FilePath | Format-String -Replacement $global:c.RuntimeConfiguration.PredefinedFormattings)) {
 		$sourceFilePath = ($Source.FilePath | Format-String -Replacement $global:c.RuntimeConfiguration.PredefinedFormattings)
 
-		$importedCsv = $sourceFilePath | Import-Csv -Delimiter $(if($Source.Delimiter) { $Source.Delimiter } else { "," })
+		$importedCsv = $sourceFilePath | Import-Csv -Delimiter $(if($Source.Delimiter) { $Source.Delimiter } else { "," }) -Encoding UTF8
 		
 		$importedCsv | Where-Object { ($null -eq $Source.FilterExpression) -or ($null -ne $Source.FilterExpression -and (Invoke-Expression $Source.FilterExpression)) } | ForEach {
 			$_temparray.Add($_)

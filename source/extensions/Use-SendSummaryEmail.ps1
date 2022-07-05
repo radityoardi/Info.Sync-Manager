@@ -39,11 +39,11 @@ try
 			UseSSL                     = $decconfig.EmailConfiguration.SMTP.UseSSL ## or not if using non-TLS
 			Credential                 = $credObject
 			From                       = $decconfig.EmailConfiguration.SMTP.Credential.Username
-			To                         = $decconfig.EmailConfiguration.SMTP.ToAddresses
+			To                         = ($decconfig.EmailConfiguration.SMTP.ToAddresses -split ";")
 			Subject                    = ($decconfig.EmailConfiguration.SMTP.Subject | Format-String -Replacement $global:c.RuntimeConfiguration.PredefinedFormattings)
 			Body                       = $filecontent
 			BodyAsHtml				         = $true
-			DeliveryNotificationOption = 'OnFailure', 'OnSuccess'
+			DeliveryNotificationOption = 'OnFailure','OnSuccess'
 
 		}                   
 		Send-MailMessage @mailParams

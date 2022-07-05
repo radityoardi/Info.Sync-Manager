@@ -532,7 +532,6 @@ Function Format-String
 				Write-Debug "Index: $($i)"
 				Write-Debug "Key: $($pair.Key)"
 				$pattern = "(?<=\{)$($pair.Key)(?=(,[^\{\}]*){0,1}(:[^\{\}]*){0,1}\})"
-				#$pattern = "$($pair.Key)"
 				Write-Debug "pattern: $($pattern)"
 				if ($InputValue -imatch $pattern)
 				{
@@ -690,70 +689,95 @@ Function Invoke-CustomOperations
 
 			switch ($CustomOperation.MethodIdentifier) {
 				"StringBeforeDash" {
-					if ($Object.Value.ContainsKey($CustomOperation.Parameters.SourceProperty) -and $Object.Value."$($CustomOperation.Parameters.SourceProperty)") {
-						$FirstDashIndex = $Object.Value."$($CustomOperation.Parameters.SourceProperty)".IndexOf("-")
-						if ($FirstDashIndex -ge 0) {
-							Set-HashtableValue $Object "$($CustomOperation.Parameters.DestinationProperty)" ($Object.Value."$($CustomOperation.Parameters.SourceProperty)".Substring(0, $FirstDashIndex))
+					try {
+						if ($Object.Value.ContainsKey($CustomOperation.Parameters.SourceProperty) -and $Object.Value."$($CustomOperation.Parameters.SourceProperty)") {
+							$FirstDashIndex = $Object.Value."$($CustomOperation.Parameters.SourceProperty)".IndexOf("-")
+							if ($FirstDashIndex -ge 0) {
+								Set-HashtableValue $Object "$($CustomOperation.Parameters.DestinationProperty)" ($Object.Value."$($CustomOperation.Parameters.SourceProperty)".Substring(0, $FirstDashIndex))
+							}
 						}
+					}
+					catch {
+						Push-Error $_ "Error when executing custom operation 'StringBeforeDash' at '$($ConfigContext.Value.Description) ($($ConfigContext.Value.Type))' '$($CustomOperation.Execution)' index $($CustomOperation.ExecutionOrder)."
 					}
 				}
 				"StringAfterDash" {
-					if ($Object.Value.ContainsKey($CustomOperation.Parameters.SourceProperty) -and $Object.Value."$($CustomOperation.Parameters.SourceProperty)") {
-						$FirstDashIndex = $Object.Value."$($CustomOperation.Parameters.SourceProperty)".IndexOf("-")
-						if ($FirstDashIndex -ge 0) {
-							Set-HashtableValue $Object "$($CustomOperation.Parameters.DestinationProperty)" ($Object.Value."$($CustomOperation.Parameters.SourceProperty)".Substring($FirstDashIndex + 1))
+					try {
+						if ($Object.Value.ContainsKey($CustomOperation.Parameters.SourceProperty) -and $Object.Value."$($CustomOperation.Parameters.SourceProperty)") {
+							$FirstDashIndex = $Object.Value."$($CustomOperation.Parameters.SourceProperty)".IndexOf("-")
+							if ($FirstDashIndex -ge 0) {
+								Set-HashtableValue $Object "$($CustomOperation.Parameters.DestinationProperty)" ($Object.Value."$($CustomOperation.Parameters.SourceProperty)".Substring($FirstDashIndex + 1))
+							}
 						}
+					}
+					catch {
+						Push-Error $_ "Error when executing custom operation 'StringAfterDash' at '$($ConfigContext.Value.Description) ($($ConfigContext.Value.Type))' '$($CustomOperation.Execution)' index $($CustomOperation.ExecutionOrder)."
 					}
 				}
 				"FormatString" {
-					if ($CustomOperation.Parameters.SourceProperties) {
-						$propsValues = @{}
-						$CustomOperation.Parameters.SourceProperties | ForEach {
-							$propsValues["$($_)"] = $Object.Value."$($_)"
+					try {
+						if ($CustomOperation.Parameters.SourceProperties) {
+							$propsValues = @{}
+							$CustomOperation.Parameters.SourceProperties | ForEach {
+								$propsValues["$($_)"] = $Object.Value."$($_)"
+							}
+							Set-HashtableValue $Object "$($CustomOperation.Parameters.DestinationProperty)" ($CustomOperation.Parameters.JoinTemplate | Format-String -Replacement $propsValues)
 						}
-						Set-HashtableValue $Object "$($CustomOperation.Parameters.DestinationProperty)" ($CustomOperation.Parameters.JoinTemplate | Format-String -Replacement $propsValues)
+					}
+					catch {
+						Push-Error $_ "Error when executing custom operation 'FormatString' at '$($ConfigContext.Value.Description) ($($ConfigContext.Value.Type))' '$($CustomOperation.Execution)' index $($CustomOperation.ExecutionOrder)."
 					}
 				}
 				"CsvLookup" {
-					$csvFilePath = ($CustomOperation.Parameters.CsvFilePath | Format-String -Replacement $CustomParameters.PredefinedFormattings)
-					if (Test-Path $csvFilePath)
-					{
-						if (-not $CustomOperation.RawData) {
-							$CustomOperation | Add-Member -Name RawData -MemberType NoteProperty -Value (Import-Csv -Path $csvFilePath)
-						} elseif ($CustomOperation.RawData -and -not (Test-IsEnabled $CustomOperation.Parameters.LoadCsvOnce)) {
-							$CustomOperation.RawData = (Import-Csv -Path $csvFilePath)
+					try {
+						$csvFilePath = ($CustomOperation.Parameters.CsvFilePath | Format-String -Replacement $CustomParameters.PredefinedFormattings)
+						if (Test-Path $csvFilePath)
+						{
+							if (-not $CustomOperation.RawData) {
+								$CustomOperation | Add-Member -Name RawData -MemberType NoteProperty -Value (Import-Csv -Path $csvFilePath)
+							} elseif ($CustomOperation.RawData -and -not (Test-IsEnabled $CustomOperation.Parameters.LoadCsvOnce)) {
+								$CustomOperation.RawData = (Import-Csv -Path $csvFilePath)
+							}
+							if ($Object.Value."$($CustomOperation.Parameters.StagingLookupProperty)" -and $null -ne $Object.Value."$($CustomOperation.Parameters.StagingLookupProperty)" -and $Object.Value."$($CustomOperation.Parameters.StagingLookupProperty)".GetType().Name -eq "String") {
+								$Object.Value."$($CustomOperation.Parameters.DestinationProperty)" = `
+									($CustomOperation.RawData | Where-Object { $_."$($CustomOperation.Parameters.CsvLookupColumn)" -eq $Object.Value."$($CustomOperation.Parameters.StagingLookupProperty)".Trim() } | Select-Object -First 1 -ExpandProperty "$($CustomOperation.Parameters.CsvValueColumn)")
+							}
 						}
-						if ($Object.Value."$($CustomOperation.Parameters.StagingLookupProperty)" -and $null -ne $Object.Value."$($CustomOperation.Parameters.StagingLookupProperty)" -and $Object.Value."$($CustomOperation.Parameters.StagingLookupProperty)".GetType().Name -eq "String") {
-							$Object.Value."$($CustomOperation.Parameters.DestinationProperty)" = `
-								($CustomOperation.RawData | Where-Object { $_."$($CustomOperation.Parameters.CsvLookupColumn)" -eq $Object.Value."$($CustomOperation.Parameters.StagingLookupProperty)".Trim() } | Select-Object -First 1 -ExpandProperty "$($CustomOperation.Parameters.CsvValueColumn)")
-						}					
+					}
+					catch {
+						Push-Error $_ "Error when executing custom operation 'CsvLookup' at '$($ConfigContext.Value.Description) ($($ConfigContext.Value.Type))' '$($CustomOperation.Execution)' index $($CustomOperation.ExecutionOrder)."
 					}
 				}
 				"DeleteEmployeeRecord" {
-					if ($CustomOperation.Parameters.DeleteSqlCommandTemplate -and $CustomOperation.Parameters.DeleteSqlCommandTemplate.MainCommand -and $CustomOperation.Parameters.DeleteSqlCommandTemplate.ExclusionCommand)
-					{
-						$UserNames = $Object.Value | ForEach { $_."$($CustomParameters.KeyMapping.StagingProperty)" }
-						$ReplacementObject = @{
-							DatabaseName     = "$($CustomParameters.Destination.ConnectionSettings.DatabaseName)"
-							SchemaName       = "$($CustomParameters.Destination.ConnectionSettings.SchemaName)"
-							TableName        = "$($CustomParameters.Destination.ConnectionSettings.TableName)"
-							EmployeeIDColumn = "$($CustomOperation.Parameters.EmployeeIDSqlColumnName)"
-							FirstEmployeeID  = "$(Convert-SqlValueScript -Value ($CustomOperation.Parameters.FirstEmployeeID -as "$($CustomOperation.Parameters.EmployeeIDType)") -Type $CustomOperation.Parameters.EmployeeIDType)"
-							LastEmployeeID   = "$(Convert-SqlValueScript -Value ($CustomOperation.Parameters.LastEmployeeID -as "$($CustomOperation.Parameters.EmployeeIDType)") -Type $CustomOperation.Parameters.EmployeeIDType)"
-							KeyColumn        = "$($CustomParameters.KeyMapping.DestinationProperty)"
-							AllKeyValues     = ($UserNames | ForEach-Object { return "$(Convert-SqlValueScript -Value ($_ -as "$($CustomParameters.KeyMapping.Type)") -Type $CustomParameters.KeyMapping.Type)" }) -join ","
-						}
-						$DeleteSqlCommand = $CustomOperation.Parameters.DeleteSqlCommandTemplate.MainCommand | Format-String -Replacement $ReplacementObject
-						if (($UserNames | Measure-Object).Count -gt 0)
+					try {
+						if ($CustomOperation.Parameters.DeleteSqlCommandTemplate -and $CustomOperation.Parameters.DeleteSqlCommandTemplate.MainCommand -and $CustomOperation.Parameters.DeleteSqlCommandTemplate.ExclusionCommand)
 						{
-							$DeleteSqlCommand += ($CustomOperation.Parameters.DeleteSqlCommandTemplate.ExclusionCommand | Format-String -Replacement $ReplacementObject)
+							$UserNames = $Object.Value | ForEach { $_."$($CustomParameters.KeyMapping.StagingProperty)" }
+							$ReplacementObject = @{
+								DatabaseName     = "$($CustomParameters.Destination.ConnectionSettings.DatabaseName)"
+								SchemaName       = "$($CustomParameters.Destination.ConnectionSettings.SchemaName)"
+								TableName        = "$($CustomParameters.Destination.ConnectionSettings.TableName)"
+								EmployeeIDColumn = "$($CustomOperation.Parameters.EmployeeIDSqlColumnName)"
+								FirstEmployeeID  = "$(Convert-SqlValueScript -Value ($CustomOperation.Parameters.FirstEmployeeID -as "$($CustomOperation.Parameters.EmployeeIDType)") -Type $CustomOperation.Parameters.EmployeeIDType)"
+								LastEmployeeID   = "$(Convert-SqlValueScript -Value ($CustomOperation.Parameters.LastEmployeeID -as "$($CustomOperation.Parameters.EmployeeIDType)") -Type $CustomOperation.Parameters.EmployeeIDType)"
+								KeyColumn        = "$($CustomParameters.KeyMapping.DestinationProperty)"
+								AllKeyValues     = ($UserNames | ForEach-Object { return "$(Convert-SqlValueScript -Value ($_ -as "$($CustomParameters.KeyMapping.Type)") -Type $CustomParameters.KeyMapping.Type)" }) -join ","
+							}
+							$DeleteSqlCommand = $CustomOperation.Parameters.DeleteSqlCommandTemplate.MainCommand | Format-String -Replacement $ReplacementObject
+							if (($UserNames | Measure-Object).Count -gt 0)
+							{
+								$DeleteSqlCommand += ($CustomOperation.Parameters.DeleteSqlCommandTemplate.ExclusionCommand | Format-String -Replacement $ReplacementObject)
+							}
+							$ReplacementObject.Clear()
+							#return the command
+							[PSCustomObject]@{
+								CustomOperation = $CustomOperation
+								SqlCommand = $DeleteSqlCommand
+							}
 						}
-						$ReplacementObject.Clear()
-						#return the command
-						[PSCustomObject]@{
-							CustomOperation = $CustomOperation
-							SqlCommand = $DeleteSqlCommand
-						}
+					}
+					catch {
+						Push-Error $_ "Error when executing custom operation 'DeleteEmployeeRecord' at '$($ConfigContext.Value.Description) ($($ConfigContext.Value.Type))' '$($CustomOperation.Execution)' index $($CustomOperation.ExecutionOrder)."
 					}
 				}
 				"Script" {
@@ -763,7 +787,7 @@ Function Invoke-CustomOperations
 							$returnval = Invoke-Expression ($CustomOperation.Parameters.PowerShellCommand | Format-String -Replacement $CustomParameters.PredefinedFormattings)
 						}
 						catch {
-							Push-Error $_
+							Push-Error $_ "Error when executing PowerShell command '$($CustomOperation.Parameters.PowerShellCommand)' at '$($ConfigContext.Value.Description) ($($ConfigContext.Value.Type))' '$($CustomOperation.Execution)' index $($CustomOperation.ExecutionOrder)."
 						}
 						if ($null -ne $returnval -and $returnval -is [array] -and $CustomOperation.Parameters.ScriptOutputParameters) {
 							$lowestCounter = ($CustomOperation.Parameters.ScriptOutputParameters | Measure-Object).Count
@@ -813,13 +837,14 @@ Function Invoke-CustomOperations
 								}
 							}
 						}
-						Push-Verbose "Executing '$(($CustomOperation.Parameters.ScriptPath | Format-String -Replacement $CustomParameters.PredefinedFormattings))'."
 						#Execute the script
 						try {
-							$returnval = (& "$(($CustomOperation.Parameters.ScriptPath | Format-String -Replacement $CustomParameters.PredefinedFormattings))" @params)
+							$_scriptPath = ($CustomOperation.Parameters.ScriptPath | Format-String -Replacement $CustomParameters.PredefinedFormattings)
+							Push-Verbose "Executing '$($_scriptPath)'."
+							$returnval = (& "$($_scriptPath)" @params)
 						}
 						catch {
-							Push-Error $_
+							Push-Error $_ "Error when executing PowerShell script on path '$($_scriptPath)' at '$($ConfigContext.Value.Description) ($($ConfigContext.Value.Type))' '$($CustomOperation.Execution)' index $($CustomOperation.ExecutionOrder)."
 						}
 						Push-Verbose "Processing return value."
 						#Processing the return value
@@ -997,25 +1022,27 @@ Function Push-Error {
 		[switch]$NoWriteHost
 	)
 	Get-CallerPreference -Cmdlet $PSCmdlet -SessionState $ExecutionContext.SessionState
-	@(
-		(-join @(
-			"$(if($Message){"$($Message)`r`n"})",
-			"$(if($ErrorRecord.Exception){"Exception: $($ErrorRecord.Exception.Message)`r`n"})",
-			"$(if($ErrorRecord.Exception -and $ErrorRecord.Exception.InnerException){"InnerException: $($ErrorRecord.Exception.InnerException.Message)`r`n"})",
-			"$(if($ErrorRecord.Exception -and $ErrorRecord.Exception.InnerException -and $ErrorRecord.Exception.InnerException.InnerException){"InnerException: $($ErrorRecord.Exception.InnerException.InnerException.Message)`r`n"})",
-			"$(if($ErrorRecord.InvocationInfo){"$($ErrorRecord.InvocationInfo.PositionMessage)`r`n`r`n"})",
-			"$(if($ErrorRecord.ScriptStackTrace){"Script Stack Trace: $($ErrorRecord.ScriptStackTrace)"})"
-		))
-	) | ForEach {
-		if (-not $NoWriteHost) {
-			Write-Error $_
-		}
-		if (-not $NoEventLog) {
-			Write-EventLog `
-				-LogName $global:c.SystemConfiguration.WindowsLog.Name `
-				-Source $global:c.SystemConfiguration.WindowsLog.Source `
-				-EventId $global:c.RuntimeConfiguration.LogRefNumber -EntryType Error `
-				-Message (Limit-EventLogMessage $_)
+	if ($Message) {
+		@(
+			(-join @(
+				"$(if($Message){"$($Message)`r`n"})",
+				"$(if($ErrorRecord.Exception){"Exception: $($ErrorRecord.Exception.Message)`r`n"})",
+				"$(if($ErrorRecord.Exception -and $ErrorRecord.Exception.InnerException){"InnerException: $($ErrorRecord.Exception.InnerException.Message)`r`n"})",
+				"$(if($ErrorRecord.Exception -and $ErrorRecord.Exception.InnerException -and $ErrorRecord.Exception.InnerException.InnerException){"InnerException: $($ErrorRecord.Exception.InnerException.InnerException.Message)`r`n"})",
+				"$(if($ErrorRecord.InvocationInfo){"$($ErrorRecord.InvocationInfo.PositionMessage)`r`n`r`n"})",
+				"$(if($ErrorRecord.ScriptStackTrace){"Script Stack Trace: $($ErrorRecord.ScriptStackTrace)"})"
+			))
+		) | ForEach {
+			if (-not $NoWriteHost) {
+				Write-Error $_
+			}
+			if (-not $NoEventLog) {
+				Write-EventLog `
+					-LogName $global:c.SystemConfiguration.WindowsLog.Name `
+					-Source $global:c.SystemConfiguration.WindowsLog.Source `
+					-EventId $global:c.RuntimeConfiguration.LogRefNumber -EntryType Error `
+					-Message (Limit-EventLogMessage $_)
+			}
 		}
 	}
 }
@@ -1030,16 +1057,18 @@ Function Push-Warning {
 		[switch]$NoWriteHost
 	)
 	Get-CallerPreference -Cmdlet $PSCmdlet -SessionState $ExecutionContext.SessionState
-	@($Message) | ForEach {
-		if (-not $NoWriteHost) {
-			Write-Warning $Message
-		}
-		if (-not $NoEventLog) {
-			Write-EventLog `
-				-LogName $global:c.SystemConfiguration.WindowsLog.Name `
-				-Source $global:c.SystemConfiguration.WindowsLog.Source `
-				-EventId $global:c.RuntimeConfiguration.LogRefNumber -EntryType Warning `
-				-Message (Limit-EventLogMessage $_)
+	if ($Message) {
+		@($Message) | ForEach {
+			if (-not $NoWriteHost) {
+				Write-Warning $Message
+			}
+			if (-not $NoEventLog) {
+				Write-EventLog `
+					-LogName $global:c.SystemConfiguration.WindowsLog.Name `
+					-Source $global:c.SystemConfiguration.WindowsLog.Source `
+					-EventId $global:c.RuntimeConfiguration.LogRefNumber -EntryType Warning `
+					-Message (Limit-EventLogMessage $_)
+			}
 		}
 	}
 }
@@ -1056,17 +1085,19 @@ Function Push-Info {
 		[switch]$NoWriteHost
 	)
 	Get-CallerPreference -Cmdlet $PSCmdlet -SessionState $ExecutionContext.SessionState
-	@($Message) | ForEach {
-		if (-not $NoWriteHost) {
-			if ($ForegroundColor) { Write-Host $Message -Fore $ForegroundColor }
-			else { Write-Host $Message }
-		}
-		if (-not $NoEventLog) {
-			Write-EventLog `
-				-LogName $global:c.SystemConfiguration.WindowsLog.Name `
-				-Source $global:c.SystemConfiguration.WindowsLog.Source `
-				-EventId $global:c.RuntimeConfiguration.LogRefNumber -EntryType Information `
-				-Message (Limit-EventLogMessage $_)
+	if ($Message) {
+		@($Message) | ForEach {
+			if (-not $NoWriteHost) {
+				if ($ForegroundColor) { Write-Host $Message -Fore $ForegroundColor }
+				else { Write-Host $Message }
+			}
+			if (-not $NoEventLog) {
+				Write-EventLog `
+					-LogName $global:c.SystemConfiguration.WindowsLog.Name `
+					-Source $global:c.SystemConfiguration.WindowsLog.Source `
+					-EventId $global:c.RuntimeConfiguration.LogRefNumber -EntryType Information `
+					-Message (Limit-EventLogMessage $_)
+			}
 		}
 	}
 }
@@ -1084,16 +1115,18 @@ Function Push-Verbose {
 	if ($VerbosePreference -ne "SilentlyContinue") {
 		#not being used as of now, by default will always log
 	}
-	@($Message) | ForEach {
-		if (-not $NoWriteHost) {
-			Write-Verbose $Message
-		}
-		if (-not $NoEventLog) {
-			Write-EventLog `
-				-LogName $global:c.SystemConfiguration.WindowsLog.Name `
-				-Source $global:c.SystemConfiguration.WindowsLog.Source `
-				-EventId $global:c.RuntimeConfiguration.LogRefNumber -EntryType Information `
-				-Message (Limit-EventLogMessage $_)
+	if ($Message) {
+		@($Message) | ForEach {
+			if (-not $NoWriteHost) {
+				Write-Verbose $Message
+			}
+			if (-not $NoEventLog) {
+				Write-EventLog `
+					-LogName $global:c.SystemConfiguration.WindowsLog.Name `
+					-Source $global:c.SystemConfiguration.WindowsLog.Source `
+					-EventId $global:c.RuntimeConfiguration.LogRefNumber -EntryType Information `
+					-Message (Limit-EventLogMessage $_)
+			}
 		}
 	}
 }

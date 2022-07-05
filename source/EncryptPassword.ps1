@@ -8,7 +8,7 @@ param(
 )
 
 #includes
-Import-Module "$($PSScriptRoot)\library\GlobalModules.psm1" -Force -Verbose:$VerbosePreference
+Import-Module "$($PSScriptRoot)\Extensions\GlobalModules.psm1" -Force -Verbose:$VerbosePreference
 
 if ($InputFile)
 {

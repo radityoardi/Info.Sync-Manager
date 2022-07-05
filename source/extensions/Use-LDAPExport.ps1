@@ -101,14 +101,19 @@ if ((Test-NetConnection $Destination.ConnectionSettings.HostName -Port (Resolve-
 									$userName = $null
 									#required information to create user
 									if ($stagingRow."sAMAccountName" -ne $null) {
+										$LogMessage.AppendLine("sAMAccountName get from sAMAccountName.")
 										$userName = $stagingRow."sAMAccountName"
+									} elseif ($Destination.GeneralSettings.AccountInfoProperties -ne $null -and $Destination.GeneralSettings.AccountInfoProperties.UsernameProperty -ne $null) {
+										$LogMessage.AppendLine("sAMAccountName get from '$($Destination.GeneralSettings.AccountInfoProperties.UsernameProperty)' property.")
+										$userName = $stagingRow."$($Destination.GeneralSettings.AccountInfoProperties.UsernameProperty)"
 									} else {
+										$LogMessage.AppendLine("sAMAccountName get from '$($StagingKey.Name)' key property.")
 										$userName = $stagingRow."$($StagingKey.Name)"
 									}
 									@("Creating a user with sAMAccountName '$($userName)'.") | ForEach {
 										Push-Verbose $_
 										$LogMessage.AppendLine($_)
-									}			
+									}
 									$uAcc.sAMAccountName = $userName
 		
 									if ($DestMappingKey.DestinationProperty -ne "sAMAccountName") {
@@ -163,10 +168,13 @@ if ((Test-NetConnection $Destination.ConnectionSettings.HostName -Port (Resolve-
 									$NewRecordKeySummary.Add($stagingRow."$($StagingKey.Name)")
 								}
 								catch {
+									$ReturnData.FailedRecords += 1
+									$FailedRecordKeySummary.Add($stagingRow."$($StagingKey.Name)")
+			
 									Push-Error $_ "$($stagingRow."$($StagingKey.Name)"): Error on creating new AD account '$($stagingRow."$($StagingKey.Name)")'."
 								}
 							}
-							}
+						}
 
 						#Check if the created account exists
 						try {
